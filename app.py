@@ -7,23 +7,26 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 
 @st.cache_data
 def carregar_dados():
-    try:
-        # Ajuste inteligente de separador para evitar erro de tokenização
-        df = pd.read_csv('FUNCIONARIOS.csv', sep=None, engine='python', encoding='utf-8')
-        df.columns = [str(c).strip().upper() for c in df.columns]
-        
-        # Converter valores financeiros
-        if 'VLRDESDOB' in df.columns:
-            df['VLRDESDOB'] = pd.to_numeric(df['VLRDESDOB'], errors='coerce').fillna(0)
-        
-        # Converter datas (padrão Excel)
-        if 'DTNEG' in df.columns:
-            df['DATA'] = pd.to_datetime(df['DTNEG'], unit='D', origin='1899-12-30', errors='coerce')
-        
-        return df
-    except Exception as e:
-        st.error(f"Erro ao carregar ficheiro: {e}")
-        return None
+    # Lista de codificações para testar (Excel BR costuma usar latin1)
+    for encoding in ['latin1', 'iso-8859-1', 'utf-8-sig', 'cp1252']:
+        try:
+            df = pd.read_csv('FUNCIONARIOS.csv', sep=None, engine='python', encoding=encoding)
+            df.columns = [str(c).strip().upper() for c in df.columns]
+            
+            # Converter valores financeiros
+            if 'VLRDESDOB' in df.columns:
+                df['VLRDESDOB'] = pd.to_numeric(df['VLRDESDOB'], errors='coerce').fillna(0)
+            
+            # Converter datas (padrão Excel)
+            if 'DTNEG' in df.columns:
+                df['DATA'] = pd.to_datetime(df['DTNEG'], unit='D', origin='1899-12-30', errors='coerce')
+            
+            return df
+        except Exception:
+            continue
+    
+    st.error("Não foi possível ler o arquivo. Verifique se ele é um CSV válido.")
+    return None
 
 df = carregar_dados()
 
@@ -37,6 +40,7 @@ if df is not None:
     if col_func in df.columns:
         lista_func = sorted(df[col_func].unique().astype(str))
         sel_func = st.sidebar.multiselect("Selecionar Funcionário(s):", options=lista_func)
+        
         df_f = df[df[col_func].isin(sel_func)] if sel_func else df
 
         # Indicadores principais
@@ -54,14 +58,20 @@ if df is not None:
             rank = df_f.groupby(col_func)['VLRDESDOB'].sum().sort_values(ascending=True).tail(10).reset_index()
             fig1 = px.bar(rank, x='VLRDESDOB', y=col_func, orientation='h', color='VLRDESDOB', color_continuous_scale='Reds')
             st.plotly_chart(fig1, use_container_width=True)
+        
         with g2:
             st.subheader("🍕 Distribuição por Histórico")
             if 'HISTORICO' in df_f.columns:
-                hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).reset_index()
-                fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
+                hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).head(10).reset_index()
+                fig2 = px.pie(hist_resumo, values='VLRDESDOB', names='HISTORICO', hole=0.4)
                 st.plotly_chart(fig2, use_container_width=True)
 
         st.subheader("📑 Histórico Detalhado")
-        st.dataframe(df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']], use_container_width=True)
+        # Formatar data para exibição
+        df_display = df_f.copy()
+        if 'DATA' in df_display.columns:
+            df_display['DATA'] = df_display['DATA'].dt.strftime('%d/%m/%Y')
+        
+        st.dataframe(df_display[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']], use_container_width=True)
     else:
-        st.error(f"Coluna {col_func} não encontrada. Colunas disponíveis: {list(df.columns)}")
+        st.error(f"Coluna '{col_func}' não encontrada. Colunas detectadas: {list(df.columns)}")
