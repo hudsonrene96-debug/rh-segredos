@@ -8,7 +8,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 @st.cache_data
 def carregar_dados():
     try:
-        # AGORA ESTÁ CORRETO: usando o nome exato do seu arquivo
+        # Ajuste inteligente de separador para evitar erro de tokenização
         df = pd.read_csv('FUNCIONARIOS.csv', sep=None, engine='python', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
@@ -34,44 +34,34 @@ if df is not None:
     st.sidebar.header("🔍 Filtros de Consulta")
     col_func = 'RAZAOSOCIAL'
     
-    # Lista de funcionários para o filtro
-    lista_func = sorted(df[col_func].unique().astype(str))
-    sel_func = st.sidebar.multiselect("Selecionar Funcionário(s):", options=lista_func)
-    
-    # Aplicar Filtro
-    df_f = df[df[col_func].isin(sel_func)] if sel_func else df
+    if col_func in df.columns:
+        lista_func = sorted(df[col_func].unique().astype(str))
+        sel_func = st.sidebar.multiselect("Selecionar Funcionário(s):", options=lista_func)
+        df_f = df[df[col_func].isin(sel_func)] if sel_func else df
 
-    # Indicadores principais
-    m1, m2, m3 = st.columns(3)
-    m1.metric("💰 Total Desembolsado", f"R$ {df_f['VLRDESDOB'].sum():,.2f}")
-    m2.metric("👥 Qtd. Funcionários", len(df_f[col_func].unique()))
-    m3.metric("📑 Total Lançamentos", len(df_f))
+        # Indicadores principais
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Total Desembolsado", f"R$ {df_f['VLRDESDOB'].sum():,.2f}")
+        m2.metric("👥 Qtd. Funcionários", len(df_f[col_func].unique()))
+        m3.metric("📑 Total Lançamentos", len(df_f))
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # Gráficos de Análise
-    g1, g2 = st.columns(2)
-    
-    with g1:
-        st.subheader("📊 Top 10 Maiores Custos")
-        rank = df_f.groupby(col_func)['VLRDESDOB'].sum().sort_values(ascending=True).tail(10).reset_index()
-        fig1 = px.bar(rank, x='VLRDESDOB', y=col_func, orientation='h', color='VLRDESDOB', 
-                          color_continuous_scale='Reds', labels={'VLRDESDOB': 'Valor (R$)', col_func: 'Funcionário'})
-        st.plotly_chart(fig1, use_container_width=True)
-        
-    with g2:
-        st.subheader("🍕 Distribuição por Histórico")
-        if 'HISTORICO' in df_f.columns:
-            hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).reset_index()
-            fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
-            st.plotly_chart(fig2, use_container_width=True)
+        # Gráficos
+        g1, g2 = st.columns(2)
+        with g1:
+            st.subheader("📊 Top 10 Maiores Custos")
+            rank = df_f.groupby(col_func)['VLRDESDOB'].sum().sort_values(ascending=True).tail(10).reset_index()
+            fig1 = px.bar(rank, x='VLRDESDOB', y=col_func, orientation='h', color='VLRDESDOB', color_continuous_scale='Reds')
+            st.plotly_chart(fig1, use_container_width=True)
+        with g2:
+            st.subheader("🍕 Distribuição por Histórico")
+            if 'HISTORICO' in df_f.columns:
+                hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).reset_index()
+                fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
+                st.plotly_chart(fig2, use_container_width=True)
 
-    # Tabela detalhada
-    st.subheader("📑 Histórico Detalhado")
-    df_tab = df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']].copy()
-    if not df_tab.empty:
-        df_tab['DATA'] = df_tab['DATA'].dt.strftime('%d/%m/%Y')
-    st.dataframe(df_tab.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
-
-else:
-    st.error("Erro crítico: Verifique se o arquivo 'FUNCIONARIOS.csv' está na mesma pasta do código.")
+        st.subheader("📑 Histórico Detalhado")
+        st.dataframe(df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']], use_container_width=True)
+    else:
+        st.error(f"Coluna {col_func} não encontrada. Colunas disponíveis: {list(df.columns)}")
