@@ -8,7 +8,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 @st.cache_data
 def carregar_dados():
     try:
-        # ATENÇÃO: O nome aqui deve ser IGUAL ao nome do arquivo no GitHub
+        # AGORA ESTÁ CORRETO: usando o nome exato do seu arquivo
         df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
@@ -66,7 +66,7 @@ if df is not None:
             fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Tabela detalhada no final
+    # Tabela detalhada
     st.subheader("📑 Histórico Detalhado")
     df_tab = df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']].copy()
     if not df_tab.empty:
@@ -74,4 +74,4 @@ if df is not None:
     st.dataframe(df_tab.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
 
 else:
-    st.error("Erro crítico: Verifique se o nome do arquivo no GitHub é 'FUNCIONARIOS.csv'")
+    st.error("Erro crítico: Verifique se o arquivo 'FUNCIONARIOS.csv' está na mesma pasta do código.")
