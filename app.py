@@ -8,7 +8,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 @st.cache_data
 def carregar_dados():
     try:
-        # Nome exato do ficheiro que está no seu GitHub
+        # Lendo o arquivo que você já subiu no GitHub
         df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
@@ -16,7 +16,7 @@ def carregar_dados():
         if 'VLRDESDOB' in df.columns:
             df['VLRDESDOB'] = pd.to_numeric(df['VLRDESDOB'], errors='coerce').fillna(0)
         
-        # Converter datas do Excel
+        # Converter datas (padrão Excel)
         if 'DTNEG' in df.columns:
             df['DATA'] = pd.to_datetime(df['DTNEG'], unit='D', origin='1899-12-30', errors='coerce')
         
@@ -30,51 +30,48 @@ df = carregar_dados()
 if df is not None:
     st.title("👥 Gestão de RH - Bem Leve (Privado)")
     
-    # Filtros
-    st.sidebar.header("Filtros")
+    # Filtros na Barra Lateral
+    st.sidebar.header("🔍 Filtros de Consulta")
     col_func = 'RAZAOSOCIAL'
     
-    # Filtro de Unidade
-    if 'CODEMP' in df.columns:
-        unidades = sorted(df['CODEMP'].unique().astype(str))
-        sel_unidade = st.sidebar.multiselect("Unidade (CODEMP):", unidades)
-        if sel_unidade:
-            df = df[df['CODEMP'].astype(str).isin(sel_unidade)]
-
-    # Filtro de Funcionário
+    # Lista de funcionários para o filtro
     lista_func = sorted(df[col_func].unique().astype(str))
-    sel_func = st.sidebar.multiselect("Funcionários:", options=lista_func)
+    sel_func = st.sidebar.multiselect("Selecionar Funcionário(s):", options=lista_func)
     
+    # Aplicar Filtro
     df_f = df[df[col_func].isin(sel_func)] if sel_func else df
 
-    # Indicadores
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Pago", f"R$ {df_f['VLRDESDOB'].sum():,.2f}")
-    c2.metric("Nº de Colaboradores", len(df_f[col_func].unique()))
-    c3.metric("Lançamentos", len(df_f))
+    # Indicadores principais
+    m1, m2, m3 = st.columns(3)
+    m1.metric("💰 Total Desembolsado", f"R$ {df_f['VLRDESDOB'].sum():,.2f}")
+    m2.metric("👥 Qtd. Funcionários", len(df_f[col_func].unique()))
+    m3.metric("📑 Total Lançamentos", len(df_f))
 
     st.markdown("---")
 
-    # Gráficos
+    # Gráficos de Análise
     g1, g2 = st.columns(2)
     
     with g1:
-        st.subheader("Custos por Colaborador (Top 10)")
+        st.subheader("📊 Top 10 Maiores Custos")
         rank = df_f.groupby(col_func)['VLRDESDOB'].sum().sort_values(ascending=True).tail(10).reset_index()
-        fig1 = px.bar(rank, x='VLRDESDOB', y=col_func, orientation='h', color='VLRDESDOB', color_continuous_scale='Reds')
+        fig1 = px.bar(rank, x='VLRDESDOB', y=col_func, orientation='h', color='VLRDESDOB', 
+                          color_continuous_scale='Reds', labels={'VLRDESDOB': 'Valor (R$)', col_func: 'Funcionário'})
         st.plotly_chart(fig1, use_container_width=True)
         
     with g2:
-        st.subheader("Tipos de Pagamento (Histórico)")
+        st.subheader("🍕 Distribuição por Histórico")
         if 'HISTORICO' in df_f.columns:
-            hist = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().reset_index()
-            fig2 = px.pie(hist, values='VLRDESDOB', names='HISTORICO', hole=0.4)
+            # Agrupa os pequenos em 'Outros' para não poluir o gráfico
+            hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).reset_index()
+            fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Tabela detalhada
-    st.subheader("Lista de Pagamentos Detalhada")
-    df_view = df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']].copy()
-    df_view['DATA'] = df_view['DATA'].dt.strftime('%d/%m/%Y')
-    st.dataframe(df_view.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
+    # Tabela detalhada no final
+    st.subheader("📑 Histórico Detalhado")
+    df_tab = df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']].copy()
+    df_tab['DATA'] = df_tab['DATA'].dt.strftime('%d/%m/%Y')
+    st.dataframe(df_tab.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
+
 else:
-    st.warning("Verifique se o ficheiro CSV foi carregado corretamente.")
+    st.error("Erro crítico: Verifique se o nome do arquivo CSV no GitHub é exatamente 'FUNCIONARIOS.xls - Sheet 1.csv'")
