@@ -9,7 +9,7 @@ st.set_page_config(page_title="Gestão de Pessoal | Bem Leve", layout="wide", pa
 def carregar_dados_rh():
     try:
         # Carregando o arquivo de funcionários
-        df = pd.read_csv('FUNCIONARIOS.xls - Sheet 1.csv', sep=',', encoding='utf-8')
+        df = pd.read_csv('FUNCIONARIOS.xls', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
         # Tratamento de Valores
