@@ -8,8 +8,8 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 @st.cache_data
 def carregar_dados():
     try:
-        # Lendo o arquivo que você já subiu no GitHub
-        df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
+        # ATENÇÃO: O nome aqui deve ser IGUAL ao nome do arquivo no GitHub
+        df = pd.read_csv('FUNCIONARIOS.xls - Sheet 1.csv', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
         # Converter valores financeiros
@@ -62,7 +62,6 @@ if df is not None:
     with g2:
         st.subheader("🍕 Distribuição por Histórico")
         if 'HISTORICO' in df_f.columns:
-            # Agrupa os pequenos em 'Outros' para não poluir o gráfico
             hist_resumo = df_f.groupby('HISTORICO')['VLRDESDOB'].sum().sort_values(ascending=False).reset_index()
             fig2 = px.pie(hist_resumo.head(10), values='VLRDESDOB', names='HISTORICO', hole=0.4)
             st.plotly_chart(fig2, use_container_width=True)
@@ -70,8 +69,9 @@ if df is not None:
     # Tabela detalhada no final
     st.subheader("📑 Histórico Detalhado")
     df_tab = df_f[[col_func, 'VLRDESDOB', 'HISTORICO', 'DATA']].copy()
-    df_tab['DATA'] = df_tab['DATA'].dt.strftime('%d/%m/%Y')
+    if not df_tab.empty:
+        df_tab['DATA'] = df_tab['DATA'].dt.strftime('%d/%m/%Y')
     st.dataframe(df_tab.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
 
 else:
-    st.error("Erro crítico: Verifique se o nome do arquivo CSV no GitHub é exatamente 'FUNCIONARIOS.xls - Sheet 1.csv'")
+    st.error("Erro crítico: Verifique se o nome do arquivo no GitHub é 'FUNCIONARIOS.xls - Sheet 1.csv'")
