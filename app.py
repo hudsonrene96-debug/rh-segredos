@@ -9,7 +9,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 def carregar_dados():
     try:
         # Nome exato do ficheiro que está no seu GitHub
-        df = pd.read_csv('FUNCIONARIOS.xls', sep=',', encoding='utf-8')
+        df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
         # Converter valores financeiros
