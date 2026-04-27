@@ -9,7 +9,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 def carregar_dados():
     try:
         # AGORA ESTÁ CORRETO: usando o nome exato do seu arquivo
-        df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
+        df = pd.read_csv('FUNCIONARIOS.csv', sep=None, engine='python', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
         # Converter valores financeiros
