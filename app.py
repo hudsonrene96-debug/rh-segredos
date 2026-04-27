@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import io
+import datetime
 
 # Configuração da página
 st.set_page_config(page_title="RH Estratégico | Bem Leve", layout="wide", page_icon="📊")
@@ -9,22 +9,21 @@ st.set_page_config(page_title="RH Estratégico | Bem Leve", layout="wide", page_
 @st.cache_data
 def carregar_dados():
     file_path = 'FUNCIONARIOS.csv'
-    # Testamos várias codificações para garantir a leitura dos acentos
+    # Tentativa de leitura com diferentes codificações
     for enc in ['latin1', 'iso-8859-1', 'utf-8-sig', 'cp1252']:
         try:
             df = pd.read_csv(file_path, sep=None, engine='python', encoding=enc)
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # 1. Tratamento Financeiro
+            # Tratamento Financeiro
             col_vlr = next((c for c in df.columns if 'VLR' in c or 'VALOR' in c), None)
             if col_vlr:
                 df['VALOR_PAGO'] = pd.to_numeric(df[col_vlr].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
             
-            # 2. Tratamento da Data (DTNEG) - Limpeza para evitar erros no seletor
+            # Tratamento da Data (DTNEG)
             if 'DTNEG' in df.columns:
                 df['DATA_REF'] = pd.to_datetime(pd.to_numeric(df['DTNEG'], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
-                # Removemos linhas onde a data é inválida para não quebrar o filtro de data
-                df = df.dropna(subset=['DATA_REF'])
+                df = df.dropna(subset=['DATA_REF']) # Remove datas inválidas para não travar o filtro
             
             return df
         except:
@@ -33,7 +32,7 @@ def carregar_dados():
 
 df = carregar_dados()
 
-if df is not None:
+if df is not None and not df.empty:
     st.title("📊 BI de Recursos Humanos - Bem Leve")
     
     # --- MAPEAMENTO DE COLUNAS ---
@@ -45,35 +44,33 @@ if df is not None:
     # --- BARRA LATERAL (FILTROS) ---
     st.sidebar.header("🔍 Filtros de Consulta")
     
-    # A. Filtro de Data (DTNEG) - Protegido contra erros
-    if 'DATA_REF' in df.columns and not df.empty:
+    # Inicializamos a variável de período para evitar NameError
+    periodo = None
+    
+    # 1. Filtro de Data (DTNEG)
+    if 'DATA_REF' in df.columns:
         min_d = df['DATA_REF'].min().date()
         max_d = df['DATA_REF'].max().date()
-        
         st.sidebar.subheader("Período (DTNEG)")
-        # Seletor de intervalo
         periodo = st.sidebar.date_input("Intervalo de Datas:", value=(min_d, max_d), min_value=min_d, max_value=max_d)
-    
-    # B. Filtros de Texto
+
+    # 2. Filtros de Texto com proteção contra valores nulos
     sel_emp = st.sidebar.multiselect("Empresa (CODEMP):", options=sorted(df[col_emp].unique().astype(str)))
     
+    sel_nat = []
     if col_nat:
         sel_nat = st.sidebar.multiselect("Natureza:", options=sorted(df[col_nat].dropna().unique().astype(str)))
-    else:
-        sel_nat = []
 
+    sel_hist = []
     if col_hist:
         sel_hist = st.sidebar.multiselect("Histórico:", options=sorted(df[col_hist].dropna().unique().astype(str)))
-    else:
-        sel_hist = []
 
     sel_func = st.sidebar.multiselect("Funcionário:", options=sorted(df[col_func].unique().astype(str)))
 
     # --- APLICAÇÃO DOS FILTROS ---
     df_f = df.copy()
     
-    # Filtro de Data (apenas se o usuário selecionou início e fim)
-    if 'DATA_REF' in df.columns and isinstance(periodo, tuple) and len(periodo) == 2:
+    if periodo and isinstance(periodo, (list, tuple)) and len(periodo) == 2:
         df_f = df_f[(df_f['DATA_REF'].dt.date >= periodo[0]) & (df_f['DATA_REF'].dt.date <= periodo[1])]
     
     if sel_emp:  df_f = df_f[df_f[col_emp].astype(str).isin(sel_emp)]
@@ -83,8 +80,8 @@ if df is not None:
 
     # --- INDICADORES ---
     c1, c2, c3, c4 = st.columns(4)
-    total = df_f['VALOR_PAGO'].sum()
-    c1.metric("💰 Total Gasto", f"R$ {total:,.2f}")
+    total_v = df_f['VALOR_PAGO'].sum() if 'VALOR_PAGO' in df_f.columns else 0
+    c1.metric("💰 Total Gasto", f"R$ {total_v:,.2f}")
     c2.metric("👥 Funcionários", len(df_f[col_func].unique()))
     
     maior = df_f['VALOR_PAGO'].max() if not df_f.empty else 0
@@ -98,9 +95,10 @@ if df is not None:
     g1, g2 = st.columns(2)
     with g1:
         st.subheader("🏆 Top 10 Gastos por Funcionário")
-        rank = df_f.groupby(col_func)['VALOR_PAGO'].sum().sort_values(ascending=True).tail(10).reset_index()
-        fig_bar = px.bar(rank, x='VALOR_PAGO', y=col_func, orientation='h', color='VALOR_PAGO', color_continuous_scale='Blues')
-        st.plotly_chart(fig_bar, use_container_width=True)
+        if not df_f.empty:
+            rank = df_f.groupby(col_func)['VALOR_PAGO'].sum().sort_values(ascending=True).tail(10).reset_index()
+            fig_bar = px.bar(rank, x='VALOR_PAGO', y=col_func, orientation='h', color='VALOR_PAGO', color_continuous_scale='Blues')
+            st.plotly_chart(fig_bar, use_container_width=True)
         
     with g2:
         st.subheader("🍕 Distribuição por Histórico")
@@ -117,4 +115,4 @@ if df is not None:
     st.dataframe(df_tab, use_container_width=True)
 
 else:
-    st.error("Não foi possível carregar os dados. Verifique o arquivo no GitHub.")
+    st.error("Não foi possível carregar os dados ou o arquivo está vazio. Verifique o arquivo 'FUNCIONARIOS.csv' no GitHub.")
