@@ -9,7 +9,7 @@ st.set_page_config(page_title="RH Segredos | Bem Leve", layout="wide", page_icon
 def carregar_dados():
     try:
         # ATENÇÃO: O nome aqui deve ser IGUAL ao nome do arquivo no GitHub
-        df = pd.read_csv('FUNCIONARIOS.xls - Sheet 1.csv', sep=',', encoding='utf-8')
+        df = pd.read_csv('FUNCIONARIOS.csv', sep=',', encoding='utf-8')
         df.columns = [str(c).strip().upper() for c in df.columns]
         
         # Converter valores financeiros
@@ -74,4 +74,4 @@ if df is not None:
     st.dataframe(df_tab.sort_values('VLRDESDOB', ascending=False), use_container_width=True)
 
 else:
-    st.error("Erro crítico: Verifique se o nome do arquivo no GitHub é 'FUNCIONARIOS.xls - Sheet 1.csv'")
+    st.error("Erro crítico: Verifique se o nome do arquivo no GitHub é 'FUNCIONARIOS.csv'")
