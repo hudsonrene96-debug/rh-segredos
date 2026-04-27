@@ -9,91 +9,85 @@ st.set_page_config(page_title="BI de Recursos Humanos - Bem Leve", layout="wide"
 @st.cache_data
 def carregar_dados():
     file_path = 'FUNCIONARIOS.csv'
-    tentativas = [{'encoding': 'latin1'}, {'encoding': 'iso-8859-1'}, {'encoding': 'utf-8-sig'}, {'encoding': 'cp1252'}]
-    
-    for config in tentativas:
+    # Testamos várias codificações para evitar o erro de 'utf-8'
+    for enc in ['latin1', 'iso-8859-1', 'utf-8-sig', 'cp1252']:
         try:
-            df = pd.read_csv(file_path, sep=None, engine='python', encoding=config['encoding'], on_bad_lines='skip')
-            if df.empty or len(df.columns) < 2: continue
+            df = pd.read_csv(file_path, sep=None, engine='python', encoding=enc)
+            # LIMPEZA CRÍTICA: Remove espaços e caracteres estranhos dos nomes das colunas
+            df.columns = [str(c).strip().upper().replace('Ó', 'O').replace('Í', 'I') for c in df.columns]
             
-            # Limpar nomes das colunas (remover espaços e colocar em maiúsculas)
-            df.columns = [str(c).strip().upper() for c in df.columns]
+            # Tratamento do Valor Financeiro
+            col_vlr = next((c for c in df.columns if 'VLR' in c or 'VALOR' in c), None)
+            if col_vlr:
+                df['VALOR_PAGO'] = pd.to_numeric(df[col_vlr].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
             
-            # Conversão Financeira
-            col_valor = next((c for c in df.columns if 'VLR' in c or 'VALOR' in c), None)
-            if col_valor:
-                df['VALOR_NUM'] = pd.to_numeric(df[col_valor].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-            
-            # Conversão de Data
-            col_data = next((c for c in df.columns if 'DT' in c or 'DATA' in c), None)
-            if col_data:
-                df['DATA_REF'] = pd.to_datetime(pd.to_numeric(df[col_data], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
+            # Tratamento da Data
+            col_dt = next((c for c in df.columns if 'DT' in c or 'DATA' in c), None)
+            if col_dt:
+                df['DATA_REF'] = pd.to_datetime(pd.to_numeric(df[col_dt], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
             
             return df
-        except: continue
+        except:
+            continue
     return None
 
 df = carregar_dados()
 
 if df is not None:
     st.title("📊 BI de Recursos Humanos - Bem Leve")
-    st.markdown("---")
-
-    # --- IDENTIFICAÇÃO AUTOMÁTICA DE COLUNAS ---
-    # Tentamos encontrar as colunas por palavras-chave
+    
+    # Identificação das colunas para os filtros
     col_emp = next((c for c in df.columns if 'EMP' in c or 'COD' in c), df.columns[0])
-    col_hist = next((c for c in df.columns if 'HIST' in c or 'NAT' in c), df.columns[1])
-    col_func = next((c for c in df.columns if 'RAZAO' in c or 'NOME' in c or 'FUNC' in c), df.columns[2])
+    col_hist = next((c for c in df.columns if 'HIST' in c or 'NAT' in c), None)
+    col_func = next((c for c in df.columns if 'RAZAO' in c or 'NOME' in c), df.columns[1])
 
     # --- BARRA LATERAL (FILTROS) ---
-    st.sidebar.header("🔍 Filtros Avançados")
+    st.sidebar.header("🔍 Filtros de Consulta")
     
-    lista_empresas = sorted(df[col_emp].unique().astype(str))
-    sel_empresas = st.sidebar.multiselect(f"Empresa ({col_emp}):", options=lista_empresas)
+    sel_emp = st.sidebar.multiselect("Filtrar por Empresa:", options=sorted(df[col_emp].unique().astype(str)))
+    
+    options_hist = sorted(df[col_hist].unique().astype(str)) if col_hist else []
+    sel_hist = st.sidebar.multiselect("Filtrar por Natureza (Histórico):", options=options_hist)
+    
+    sel_func = st.sidebar.multiselect("Filtrar por Funcionário:", options=sorted(df[col_func].unique().astype(str)))
 
-    lista_hist = sorted(df[col_hist].unique().astype(str))
-    sel_hist = st.sidebar.multiselect(f"Natureza/Histórico ({col_hist}):", options=lista_hist)
-
-    lista_func = sorted(df[col_func].unique().astype(str))
-    sel_func = st.sidebar.multiselect(f"Funcionário ({col_func}):", options=lista_func)
-
-    # Aplicação dos Filtros
+    # Aplicar Filtros
     df_f = df.copy()
-    if sel_empresas: df_f = df_f[df_f[col_emp].astype(str).isin(sel_empresas)]
-    if sel_hist:     df_f = df_f[df_f[col_hist].astype(str).isin(sel_hist)]
-    if sel_func:     df_f = df_f[df_f[col_func].astype(str).isin(sel_func)]
+    if sel_emp:  df_f = df_f[df_f[col_emp].astype(str).isin(sel_emp)]
+    if sel_hist: df_f = df_f[df_f[col_hist].astype(str).isin(sel_hist)]
+    if sel_func: df_f = df_f[df_f[col_func].astype(str).isin(sel_func)]
 
     # --- INDICADORES ---
-    v_col = 'VALOR_NUM' if 'VALOR_NUM' in df_f.columns else df_f.columns[0]
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Total Gasto", f"R$ {df_f[v_col].sum():,.2f}")
-    c2.metric("👥 Colaboradores", len(df_f[col_func].unique()))
+    total = df_f['VALOR_PAGO'].sum()
+    c1.metric("💰 Total Gasto", f"R$ {total:,.2f}")
+    c2.metric("👥 Qtd. Funcionários", len(df_f[col_func].unique()))
     
-    maior_val = df_f[v_col].max() if not df_f.empty else 0
-    menor_val = df_f[df_f[v_col] > 0][v_col].min() if not df_f.empty else 0
-    
-    c3.metric("📈 Maior Valor", f"R$ {maior_val:,.2f}")
-    c4.metric("📉 Menor Valor", f"R$ {menor_val:,.2f}")
+    # Maior e Menor Salário (do filtro atual)
+    maior = df_f['VALOR_PAGO'].max() if not df_f.empty else 0
+    menor = df_f[df_f['VALOR_PAGO'] > 0]['VALOR_PAGO'].min() if not df_f.empty else 0
+    c3.metric("📈 Maior Salário", f"R$ {maior:,.2f}")
+    c4.metric("📉 Menor Salário", f"R$ {menor:,.2f}")
 
     st.markdown("---")
 
     # --- GRÁFICOS ---
     g1, g2 = st.columns(2)
-
+    
     with g1:
-        st.subheader("🏆 Top 10 Gastos por Funcionário")
-        rank = df_f.groupby(col_func)[v_col].sum().sort_values(ascending=True).tail(10).reset_index()
-        fig_bar = px.bar(rank, x=v_col, y=col_func, orientation='h', color=v_col, color_continuous_scale='Blues')
+        st.subheader("🏆 Top 10 Custos")
+        rank = df_f.groupby(col_func)['VALOR_PAGO'].sum().sort_values(ascending=True).tail(10).reset_index()
+        fig_bar = px.bar(rank, x='VALOR_PAGO', y=col_func, orientation='h', color='VALOR_PAGO', color_continuous_scale='Blues')
         st.plotly_chart(fig_bar, use_container_width=True)
-
+        
     with g2:
         st.subheader("🍕 Distribuição por Natureza")
-        fig_pie = px.pie(df_f, values=v_col, names=col_hist, hole=0.5)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        if col_hist:
+            fig_pie = px.pie(df_f, values='VALOR_PAGO', names=col_hist, hole=0.4)
+            st.plotly_chart(fig_pie, use_container_width=True)
 
     # --- TABELA ---
-    st.subheader("📑 Tabela de Dados")
+    st.subheader("📑 Detalhamento")
     st.dataframe(df_f, use_container_width=True)
-
 else:
-    st.error("Não foi possível carregar os dados. Verifique se o arquivo FUNCIONARIOS.csv está correto.")
+    st.error("Erro ao processar o arquivo. Verifique se o nome no GitHub é 'FUNCIONARIOS.csv'")
