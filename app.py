@@ -8,21 +8,22 @@ st.set_page_config(page_title="RH Estratégico | Bem Leve", layout="wide", page_
 @st.cache_data
 def carregar_dados():
     file_path = 'FUNCIONARIOS.csv'
-    # Tenta várias codificações para evitar o erro de decoding
+    # Teste de múltiplas codificações para evitar erros de leitura
     for enc in ['latin1', 'iso-8859-1', 'utf-8-sig', 'cp1252']:
         try:
             df = pd.read_csv(file_path, sep=None, engine='python', encoding=enc)
+            # Limpeza rigorosa dos nomes das colunas
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # Limpeza Financeira
+            # Tratamento Financeiro
             col_vlr = next((c for c in df.columns if 'VLR' in c or 'VALOR' in c), None)
             if col_vlr:
                 df['VALOR_PAGO'] = pd.to_numeric(df[col_vlr].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
             
-            # Limpeza de Data (DTNEG) - Proteção contra erros de calendário
+            # Tratamento da Data (DTNEG) - Conversão do formato Excel
             if 'DTNEG' in df.columns:
                 df['DATA_REF'] = pd.to_datetime(pd.to_numeric(df['DTNEG'], errors='coerce'), unit='D', origin='1899-12-30', errors='coerce')
-                df = df.dropna(subset=['DATA_REF']) 
+                df = df.dropna(subset=['DATA_REF']) # Remove datas inválidas para o calendário
             
             return df
         except:
@@ -43,13 +44,13 @@ if df is not None and not df.empty:
     # --- BARRA LATERAL (FILTROS) ---
     st.sidebar.header("🔍 Filtros de Consulta")
     
-    # Inicializa período para evitar NameError
+    # Inicialização para evitar NameError
     periodo = None
     if 'DATA_REF' in df.columns:
         min_d, max_d = df['DATA_REF'].min().date(), df['DATA_REF'].max().date()
         periodo = st.sidebar.date_input("Período (DTNEG):", value=(min_d, max_d), min_value=min_d, max_value=max_d)
 
-    # Filtros com proteção contra valores vazios
+    # Filtros de Texto com proteção contra nulos
     sel_emp = st.sidebar.multiselect(f"Empresa ({col_emp}):", options=sorted(df[col_emp].unique().astype(str)))
     sel_nat = st.sidebar.multiselect("Natureza:", options=sorted(df[col_nat].dropna().unique().astype(str))) if col_nat else []
     sel_hist = st.sidebar.multiselect("Histórico:", options=sorted(df[col_hist].dropna().unique().astype(str))) if col_hist else []
@@ -72,8 +73,8 @@ if df is not None and not df.empty:
     
     maior = df_f['VALOR_PAGO'].max() if not df_f.empty else 0
     menor = df_f[df_f['VALOR_PAGO'] > 0]['VALOR_PAGO'].min() if not df_f.empty else 0
-    c3.metric("📈 Maior Salário", f"R$ {maior:,.2f}")
-    c4.metric("📉 Menor Salário", f"R$ {menor:,.2f}")
+    c3.metric("📈 Maior Valor", f"R$ {maior:,.2f}")
+    c4.metric("📉 Menor Valor", f"R$ {menor:,.2f}")
 
     st.markdown("---")
 
@@ -96,4 +97,4 @@ if df is not None and not df.empty:
     st.dataframe(df_tab, use_container_width=True)
 
 else:
-    st.error("Erro ao carregar os dados. Verifique o arquivo 'FUNCIONARIOS.csv' no GitHub.")
+    st.error("Erro ao carregar os dados. Verifique se o arquivo 'FUNCIONARIOS.csv' está no GitHub.")
